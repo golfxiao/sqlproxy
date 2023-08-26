@@ -56,6 +56,29 @@ go build
 ./sqlproxy -config ./etc/sqlproxy.yaml &
 ```
 
+### 1.5 应用连接中间件
+假如一个应用服务A原来使用的是MySQL数据库，现在需要对接基于oracle语法的达梦数据库，理论上代码层不用作大的改动，只将DB连接串由原来指向MySQL改为指向此sqlproxy中间件：
+```
+# 原始连接串，假如原先连接的MySQL服务器为192.168.23.215:3306
+demouser:demopwd@tcp(192.168.23.215:3306)/pc3?timeout=1000ms&readTimeout=1000ms&writeTimeout=5000ms&charset=utf8
+
+# 对接信创后连接串,假设信创中间件地址为：192.168.23.217:9696, testuser1为中间件上为应用配置的用户名
+testuser1:testpwd1@tcp(192.168.23.217:9696)/pc3?timeout=1000ms&readTimeout=1000ms&writeTimeout=5000ms&charset=utf8
+```
+
+中间件已经针对达梦数据库做了一部分已知的对接工作，例如：
+- replace into语句转换为merge into； 
+- on duplidate key update 语句转换为merge into语句； 
+- 不兼容的反引号`替换为达梦中支持的双引号"； 
+- 不兼容的MySQL转义方式`\'`（斜杠转义）替换为达梦中的转义方式`''`(引号转义)； 
+- 达梦驱动中的长文本字段类型DMClob自动转换为通用的string；
+- 不兼容的MySQL时间戳零值`0000-00-00 00:00:00`替换为达梦中的`0001-01-01 00:00:00`； 
+- 达梦驱动读出的时间戳格式为`2006-01-02T15:04:05.999999999Z07:00`,中间件会根据DB字段定义转换为应用需要的格式； 
+- 去掉达梦中不支持的`force index`语法； 
+- 去掉Insert语句中达梦不支持的自增列； 
+
+除这些外，可能还会有其它不兼容的语法，可以选择在中间件上做二次开发。
+
 ## 2. 二次开发
 
 本项目目前主要是针对达梦数据库作了支持，支持将mysql中的`on duplicate key update`语句转换成达梦中的`merge into`语句，下面就以此为例介绍如何作新数据库以及新语法的扩展。
