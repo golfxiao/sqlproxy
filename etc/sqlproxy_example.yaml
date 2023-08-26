@@ -1,0 +1,76 @@
+# server listen addr
+addr: 0.0.0.0:9696
+
+# server user and password
+user_list:
+  - user: testuser1
+    password: testpwd1
+  - user: testuser2
+    password: testpwd2
+
+# the web api server
+web_addr: 0.0.0.0:9797
+#HTTP Basic Auth
+web_user: admin
+web_password: admin
+
+# if set log_path, the sql log will write into log_path/sql.log,the system log
+# will write into log_path/sys.log
+log_path: ./etc/
+
+# log level[debug|info|warn|error],default error
+log_level: debug
+
+# if set log_sql(on|off) off,the sql log will not output
+log_sql: on
+
+# only log the query that take more than slow_log_time ms
+#slow_log_time : 100
+
+# the path of blacklist sql file
+# all these sqls in the file will been forbidden by sqlproxy
+#blacklist_sql_file: /Users/flike/blacklist
+
+# only allow this ip list ip to connect sqlproxy
+# support ip and ip segment
+#allow_ips : 127.0.0.1,192.168.15.0/24
+
+# the charset of sqlproxy, if you don't set this item
+# the default charset of sqlproxy is utf8.
+#proxy_charset: gbk
+
+# node is an agenda for real remote mysql server.
+nodes:
+  - # db alias name, used to specify db name for `use DB` command and the range of db that users can access.
+    name: demodb
+    # db driver name
+    driver_name: dm
+
+    # default max conns for connection pool
+    max_conns_limit: 32
+
+    # the db connection string. 
+	  # In the context of an Oracle database, the user needs to bind a user to a specific tablespace.
+    datasource: dm://demouser:demopwd@192.168.1.119:5236
+
+  - # db alias name
+    name: demodb2
+    # db driver name
+    driver_name: mysql
+
+    # default max conns for connection pool
+    max_conns_limit: 32
+
+    # the db connection string
+    datasource: demouser2:demopwd2@tcp(192.168.1.120:3306)/demodb2?charset=utf8mb4&readTimeout=10s&writeTimeout=10s
+#
+
+
+# schema defines sharding rules, the db is the sharding table database.
+schema_list:
+  - user: testuser1
+    nodes: [ demodb ]
+  - user: testuser2
+    nodes: [ demodb2 ]
+
+

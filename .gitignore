@@ -1,0 +1,12 @@
+bin
+pkg
+.DS_Store
+y.output
+.idea
+*.iml
+go.sum
+core/hack/version.go
+.vscode/
+main
+etc/*.log
+sqlproxy
