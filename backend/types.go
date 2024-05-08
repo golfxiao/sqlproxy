@@ -1,6 +1,8 @@
 package backend
 
-import "database/sql"
+import (
+	"database/sql"
+)
 
 // db querier
 type dbQuerier interface {
@@ -8,6 +10,11 @@ type dbQuerier interface {
 	Exec(query string, args ...interface{}) (sql.Result, error)
 	Query(query string, args ...interface{}) (*sql.Rows, error)
 	QueryRow(query string, args ...interface{}) *sql.Row
+}
+
+type dbQuerierWithCtx interface {
+	IContext
+	dbQuerier
 }
 
 // transaction beginner
@@ -22,7 +29,23 @@ type txEnder interface {
 }
 
 type SQLPlugin interface {
-	dbQuerier
+	dbQuerierWithCtx
 	txer
 	txEnder
+}
+
+func dbQuerierToTxer(db dbQuerierWithCtx) txer {
+	if wrapper, ok := db.(*PoolWrapper); ok {
+		return wrapper.dbQuerier.(txer)
+	} else {
+		return db.(txer)
+	}
+}
+
+func dbQuerierToTxEnder(db dbQuerierWithCtx) txEnder {
+	if wrapper, ok := db.(*PoolWrapper); ok {
+		return wrapper.dbQuerier.(txEnder)
+	} else {
+		return db.(txEnder)
+	}
 }

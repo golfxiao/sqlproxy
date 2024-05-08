@@ -185,7 +185,7 @@ func TestGenerateQueryForArgs(t *testing.T) {
 				"PRIMARY": {"cal_id"},
 			},
 		}, nil, nil)
-		convertTree := converter.convertStmt(tree)
+		convertTree, _ := converter.convertStmt(tree)
 		if convertTree == nil {
 			t.Errorf("convert failed: %s", tcase.query)
 			continue

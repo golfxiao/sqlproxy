@@ -15,6 +15,7 @@
 package backend
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"sqlproxy/core/golog"
@@ -22,7 +23,8 @@ import (
 )
 
 type convertSQLPlugin struct {
-	db        dbQuerier
+	Context
+	db        dbQuerierWithCtx
 	converter sqlparser.SQLConverter
 }
 
@@ -80,7 +82,31 @@ func (d *convertSQLPlugin) Rollback() error {
 	return d.db.(txEnder).Rollback()
 }
 
-func wrapConverter(db dbQuerier, alias, driverName string, converterName string) (dbQuerier, error) {
+func wrapConverter(db dbQuerierWithCtx, alias, driverName string, converterName string) (dbQuerierWithCtx, error) {
+	value := db.GetContext().Value(CTX_KEY_CONVERTER)
+	if value != nil && value.(sqlparser.SQLConverter) != nil {
+		golog.Info("convertSQLPlugin", "wrapConverter", "reuse sql converter from context", 0, "alias", alias)
+		return &convertSQLPlugin{
+			db:        db,
+			converter: value.(sqlparser.SQLConverter),
+		}, nil
+	}
+
+	converter, err := getConverter(db, alias, driverName, converterName)
+	if converter == nil {
+		golog.Warn("convertSQLPlugin", "wrapConverter", "Unsupported converterName:"+converterName, 0, err)
+		return db, nil
+	}
+
+	d := new(convertSQLPlugin)
+	d.db = db
+	d.converter = converter
+	d.WithContext(context.WithValue(db.GetContext(), CTX_KEY_CONVERTER, converter))
+	return d, nil
+
+}
+
+func getConverter(db dbQuerier, alias, driverName, converterName string) (sqlparser.SQLConverter, error) {
 	//支持达梦DB，查询表唯一索引和主键，用于 (on duplicate key update)  ->  (merge into ... using dual on ... when matched then update ... when not matched then insert)
 	tableUniqueIndexs := map[string]map[string][]string{}
 	incrementColumns := map[string]map[string]int{}
@@ -100,15 +126,7 @@ func wrapConverter(db dbQuerier, alias, driverName string, converterName string)
 
 	golog.Info("convertSQLPlugin", "wrapConverter", fmt.Sprintf("alias: %s, converterName: %s", alias, converterName), 0)
 	converter := sqlparser.GetSQLConverter(converterName, tableUniqueIndexs, tableColumns, incrementColumns)
-	if converter == nil {
-		golog.Warn("convertSQLPlugin", "Prepare", "Unsupported converterName:"+converterName, 0)
-		return db, nil
-	}
-
-	return &convertSQLPlugin{
-		db:        db,
-		converter: converter,
-	}, nil
+	return converter, nil
 }
 
 func getTableUniqueIndexs(db dbQuerier, alias string) (map[string]map[string][]string, error) {

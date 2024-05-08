@@ -57,6 +57,7 @@ type NodeConfig struct {
 	DriverName   string `yaml:"driver_name"`
 	Datasource   string `yaml:"datasource"`
 	MaxOpenConns int    `yaml:"max_conns_limit"`
+	MaxLifeTime  int    `yaml:"max_life_time"`
 	TestSQL      string `yaml:"test_sql"`
 }
 

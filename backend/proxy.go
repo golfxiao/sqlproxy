@@ -18,8 +18,15 @@ var (
 
 type BackendProxy struct {
 	cfg  config.NodeConfig
-	isTx bool      // 是否在事务中
-	db   dbQuerier // 实现了sql.DB接口的对象，可以是sql.DB，也可以是其它包装后的对象
+	isTx bool             // 是否在事务中
+	db   dbQuerierWithCtx // 实现了sql.DB接口的对象，可以是sql.DB，也可以是其它包装后的对象
+
+}
+
+// 带有上下文信息的dbQuerier
+type PoolWrapper struct {
+	Context
+	dbQuerier
 }
 
 func NewBackendProxy(cfg config.NodeConfig) *BackendProxy {
@@ -35,13 +42,16 @@ func (n *BackendProxy) InitConnectionPool() error {
 	}
 	pool.SetMaxOpenConns(n.cfg.MaxOpenConns)
 	pool.SetMaxIdleConns(n.cfg.MaxOpenConns)
+	if n.cfg.MaxLifeTime > 0 {
+		pool.SetConnMaxLifetime(time.Duration(n.cfg.MaxLifeTime) * time.Minute)
+	}
 
 	err = pool.Ping()
 	if err != nil {
 		return err
 	}
 
-	db, err := wrapFunctions(pool, n.cfg)
+	db, err := wrapFunctions(&PoolWrapper{dbQuerier: pool}, n.cfg)
 	if err != nil {
 		return err
 	}
@@ -180,7 +190,10 @@ func (n *BackendProxy) Begin() (*BackendProxy, error) {
 		return nil, err
 	}
 
-	db, err := wrapFunctions(tx, n.cfg)
+	// 将原始DB的上下文给带过去
+	wrapper := &PoolWrapper{dbQuerier: tx}
+	wrapper.WithContext(n.db.GetContext())
+	db, err := wrapFunctions(wrapper, n.cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -223,7 +236,7 @@ func (n *BackendProxy) Rollback() error {
 // It takes a dbQuerier and a config.NodeConfig as parameters and returns a
 // dbQuerier. The returned dbQuerier has query logging enabled, which means
 // that all database queries executed through it will be logged.
-func wrapFunctions(db dbQuerier, cfg config.NodeConfig) (dbQuerier, error) {
+func wrapFunctions(db dbQuerierWithCtx, cfg config.NodeConfig) (dbQuerierWithCtx, error) {
 	db = wrapQueryLog(db, cfg.Name)
 	switch cfg.DriverName {
 	case "oci8", "dm":

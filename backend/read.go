@@ -31,12 +31,14 @@ func readRow(driverName string, columnTypes []*sql.ColumnType, cursor *sql.Rows)
 			switch (*col.(*interface{})).(type) {
 			case time.Time:
 				v := (*col.(*interface{})).(time.Time)
+				tv := ""
 				switch columnTypes[i].DatabaseTypeName() {
 				case "DATE":
-					values[i] = sql.RawBytes(v.Format("2006-01-02"))
+					tv = v.Format("2006-01-02")
 				case "TIMESTAMP":
-					values[i] = sql.RawBytes(v.Format("2006-01-02 15:04:05"))
+					tv = v.Format("2006-01-02 15:04:05")
 				}
+				values[i] = sql.RawBytes(strings.ReplaceAll(tv, "0001-01-01", "0000-00-00"))
 			default:
 				values[i] = nil
 			}

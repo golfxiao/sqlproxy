@@ -1,5 +1,6 @@
 bin
 pkg
+instance
 .DS_Store
 y.output
 .idea

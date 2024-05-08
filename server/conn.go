@@ -266,8 +266,8 @@ func (c *ClientConn) readHandshakeResponse() error {
 		golog.Error("ClientConn", "readHandshakeResponse", "password error", 0,
 			"auth", auth,
 			"checkAuth", checkAuth,
-			"client_user", c.user,
-			"config_set_user", c.user,
+			"user", c.user,
+			"salt", c.salt,
 			"password", c.proxy.users[c.user])
 		return mysql.NewDefaultError(mysql.ER_ACCESS_DENIED_ERROR, c.user, c.c.RemoteAddr().String(), "Yes")
 	}

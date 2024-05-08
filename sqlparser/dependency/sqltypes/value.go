@@ -353,13 +353,13 @@ var SQLDecodeMap [256]byte
 var encodeRef = map[byte]byte{
 	'\x00': '0',
 	'\'':   '\'',
-	'"':    '"',
-	'\b':   'b',
-	'\n':   'n',
-	'\r':   'r',
-	'\t':   't',
-	26:     'Z', // ctl-Z
-	'\\':   '\\',
+	//'"':    '"',
+	'\b': 'b',
+	'\n': 'n',
+	'\r': 'r',
+	'\t': 't',
+	26:   'Z', // ctl-Z
+	'\\': '\\',
 }
 
 func init() {

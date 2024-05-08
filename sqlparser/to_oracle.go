@@ -34,8 +34,6 @@ func NewOracleConverter(tableUniqueIndexs map[string]map[string][]string, tableC
 // 3. convert mysql ast to oracle ast
 // 4. rebuild oracle sql from ast
 func (this *OracleConverter) Convert(sql string, args ...interface{}) (string, []interface{}, error) {
-	// TODO only support insert and replace statement?
-	// ` -> " , group_concat -> wm_concat
 	if !supportConvert(sql) {
 		return sql, args, nil
 	}
@@ -44,8 +42,9 @@ func (this *OracleConverter) Convert(sql string, args ...interface{}) (string, [
 		log.Printf("ignoring error parsing sql '%s': %v", sql, err)
 		return "", args, err
 	}
-
-	oracleStmt, args := this.convertStmtArgs(this.convertStmt(stmt), args...)
+	// 转换statement时可能带来参数数量的变化，例如：replace转merge， insert去掉increment column等，
+	// 因此，参数args也需要作相应的配套处理
+	oracleStmt, args := this.convertStmt(stmt, args...)
 
 	if oracleStmt == nil {
 		return this.replaceCommonIdents(sql), args, nil
@@ -56,15 +55,23 @@ func (this *OracleConverter) Convert(sql string, args ...interface{}) (string, [
 	return convertSQL, args, nil
 }
 
-func (this *OracleConverter) convertStmt(stmt Statement) Statement {
+func (this *OracleConverter) convertStmt(stmt Statement, args ...interface{}) (Statement, []interface{}) {
+	var newStmt Statement
 	switch stmt.(type) {
 	case *Insert:
-		return this.convertInsert(stmt.(*Insert))
+		newStmt = this.convertInsert(stmt.(*Insert))
+	case *Update:
+		newStmt = this.convertUpdateIncrement(stmt.(*Update))
 	case *Select:
-		return this.convertSelect(stmt.(*Select))
+		newStmt = this.convertSelect(stmt.(*Select))
 	default:
-		return stmt
+		newStmt = stmt
 	}
+
+	if this.needConvertArgs(newStmt, args...) {
+		return this.convertStmtArgs(newStmt, args...)
+	}
+	return newStmt, args
 }
 
 func (this *OracleConverter) convertSelect(stmt *Select) Statement {
@@ -77,19 +84,20 @@ func (this *OracleConverter) convertSelect(stmt *Select) Statement {
 	}
 	return stmt
 }
-func (this *OracleConverter) convertStmtArgs(stmt Statement, args ...interface{}) (Statement, []interface{}) {
+
+func (this *OracleConverter) needConvertArgs(stmt Statement, args ...interface{}) bool {
 	if len(args) == 0 {
-		return stmt, args
+		return false
 	}
 	switch stmt.(type) {
-	case *Merge:
-		return this.convertMerge(stmt.(*Merge), args...)
+	case *Merge, *Insert:
+		return true
+	default:
+		return false
 	}
-	return stmt, args
 }
 
-func (this *OracleConverter) convertMerge(stmt *Merge, args ...interface{}) (Statement, []interface{}) {
-
+func (this *OracleConverter) convertStmtArgs(stmt Statement, args ...interface{}) (Statement, []interface{}) {
 	newArgs := []interface{}{}
 	id := 1
 	visit := func(node SQLNode) (kcontinue bool, err error) {
@@ -111,7 +119,7 @@ func (this *OracleConverter) convertMerge(stmt *Merge, args ...interface{}) (Sta
 }
 
 func (this *OracleConverter) convertInsert(stmt *Insert) Statement {
-	//检查有无自增字段
+	// try to find auto increment columns and remove them
 	stmt = this.convertInsertIncrement(stmt)
 	// write a method to walk ast tree, recognize all kinds of expr, and rebuild oracle ast
 	if stmt.Action == InsertStr && stmt.OnDup == nil {
@@ -122,6 +130,7 @@ func (this *OracleConverter) convertInsert(stmt *Insert) Statement {
 		return stmt
 	}
 
+	// find unique columns for table
 	condcols := this.getUniqueConditionColumns(stmt)
 	if len(condcols) == 0 {
 		stmt.OnDup = nil
@@ -135,7 +144,7 @@ func (this *OracleConverter) convertInsert(stmt *Insert) Statement {
 	}
 
 	// sets the qualifier for columns
-	setQualifierForCols(tableExpr)
+	// setQualifierForCols(tableExpr)
 	setQualifierForCols(matchedExpr)
 	log.Printf("condcols: %v, tableExpr: %v, matchedExpr: %v", condcols, tableExpr, matchedExpr)
 
@@ -145,9 +154,23 @@ func (this *OracleConverter) convertInsert(stmt *Insert) Statement {
 		Matched:  matchedExpr,
 		Unmatched: &UnmatchedExpr{
 			Columns: stmt.Columns,
-			Rows:    stmt.Rows,
+			// Rows:    Rows,
+			Values: buildValuesExpr(stmt),
 		},
 	}
+}
+
+func buildValuesExpr(stmt *Insert) ValuesExpr {
+	values := make([]*ColName, 0, len(stmt.Columns))
+	for _, column := range stmt.Columns {
+		values = append(values, &ColName{
+			Name: column,
+			Qualifier: TableName{
+				Name: TableIdent{v: "s"},
+			},
+		})
+	}
+	return ValuesExpr(values)
 }
 
 func (this *OracleConverter) convertInsertIncrement(stmt *Insert) *Insert {
@@ -160,6 +183,7 @@ func (this *OracleConverter) convertInsertIncrement(stmt *Insert) *Insert {
 		return stmt
 	}
 
+	// 没有指定columns的补充columns
 	if len(stmt.Columns) == 0 {
 		stmt.Columns = []ColIdent{}
 		for _, column := range this.tableColumns[stmt.Table.Name.String()] {
@@ -167,6 +191,7 @@ func (this *OracleConverter) convertInsertIncrement(stmt *Insert) *Insert {
 		}
 	}
 
+	// remove auto increment columns
 	ns := []int{}
 	newColumns := []ColIdent{}
 	for i, column := range stmt.Columns {
@@ -198,6 +223,27 @@ func (this *OracleConverter) convertInsertIncrement(stmt *Insert) *Insert {
 	return stmt
 }
 
+func (this *OracleConverter) convertUpdateIncrement(stmt *Update) *Update {
+	if len(stmt.TableExprs) == 0 {
+		return stmt
+	}
+	incrementColumns := this.incrementColumns[getTableName(stmt)]
+	if incrementColumns == nil || len(incrementColumns) == 0 {
+		return stmt
+	}
+
+	// remove auto increment columns
+	newExprs := make([]*UpdateExpr, 0, len(stmt.Exprs))
+	for _, expr := range stmt.Exprs {
+		if _, ok := incrementColumns[expr.Name.Name.String()]; ok {
+			continue
+		}
+		newExprs = append(newExprs, expr)
+	}
+	stmt.Exprs = newExprs
+	return stmt
+}
+
 func (this *OracleConverter) buildMergeTableExpr(stmt *Insert, condcols [][]string) *MergeTableExpr {
 	onCondition := buildJoinConditions(stmt, condcols)
 	if onCondition == nil {
@@ -209,11 +255,7 @@ func (this *OracleConverter) buildMergeTableExpr(stmt *Insert, condcols [][]stri
 			Expr: stmt.Table,
 			As:   NewTableIdent("t"),
 		},
-		RightExpr: &AliasedTableExpr{
-			Expr: TableName{
-				Name: NewTableIdent("dual"),
-			},
-		},
+		RightExpr: buildRightTableExpr(stmt),
 		Condition: JoinCondition{
 			On: onCondition,
 		},
@@ -279,6 +321,22 @@ func getInsertValues(stmt *Insert) []*SQLVal {
 	return vals
 }
 
+func getTableName(stmt *Update) string {
+	var tableName string
+	visit := func(node SQLNode) (kcontinue bool, err error) {
+		switch node.(type) {
+		case TableName:
+			table := node.(TableName)
+			tableName = table.Name.String()
+			return false, nil
+		default:
+			return true, nil
+		}
+	}
+	Walk(visit, stmt.TableExprs)
+	return tableName
+}
+
 // sets the qualifier for columns in the SQLNode.
 //
 // It takes a SQLNode as a parameter and sets the qualifier of any ColName
@@ -300,18 +358,49 @@ func setQualifierForCols(node SQLNode) SQLNode {
 	return node
 }
 
-func buildJoinConditions(stmt *Insert, condcols [][]string) Expr {
-	vals := getInsertValues(stmt)
+func buildRightTableExpr(stmt *Insert) *VirtualTableExpr {
+	return &VirtualTableExpr{
+		TableName: NewTableIdent("s"),
+		Columns:   stmt.Columns,
+		Rows:      buildSelectValues(stmt),
+	}
+}
 
+func buildSelectValues(stmt *Insert) SelectValues {
+	values := make([]SelectTuple, 0, 10)
+	visit := func(node SQLNode) (kcontinue bool, err error) {
+		switch node.(type) {
+		case Exprs:
+			values = append(values, SelectTuple(node.(Exprs)))
+			return true, nil
+		default:
+			return true, nil
+		}
+	}
+	Walk(visit, stmt.Rows)
+	return SelectValues(values)
+}
+
+func buildJoinConditions(stmt *Insert, condcols [][]string) Expr {
 	exprs := make([][]*ComparisonExpr, 0, len(condcols))
 	for _, condcol := range condcols {
 		expr := make([]*ComparisonExpr, 0, len(condcol))
-		for i, column := range stmt.Columns {
+		for _, column := range stmt.Columns {
 			if StringIn(column.String(), condcol...) {
 				expr = append(expr, &ComparisonExpr{
 					Operator: EqualStr,
-					Left:     &ColName{Name: column},
-					Right:    &SQLVal{vals[i].Type, vals[i].Val},
+					Left: &ColName{
+						Name: column,
+						Qualifier: TableName{
+							Name: NewTableIdent("t"),
+						},
+					},
+					Right: &ColName{
+						Name: column,
+						Qualifier: TableName{
+							Name: NewTableIdent("s"),
+						},
+					},
 				})
 			}
 		}

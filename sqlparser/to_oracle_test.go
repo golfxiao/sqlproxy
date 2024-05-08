@@ -21,9 +21,21 @@ func TestConvertToOracle(t *testing.T) {
 		in, out string
 	}{
 		{
-			in:  `INSERT INTO webcal_entry_recurrencerule(cal_id,cal_frequency,cal_interval,cal_byday,cal_bymonth,cal_bymonthday,cal_bysetpos,cal_count,cal_enddate) VALUES (?,?,?,?,?,?,?,?,?) on duplicate key update cal_frequency=?,cal_interval=?,cal_byday=?,cal_bymonth=?,cal_bymonthday=?,cal_bysetpos=?,cal_count=?,cal_enddate=?`,
-			out: `merge into "webcal_entry_recurrencerule" as "t" using "dual" on "t"."cal_id" = :v1 when matched then update set "t"."cal_frequency" = :v10, "t"."cal_interval" = :v11, "t"."cal_byday" = :v12, "t"."cal_bymonth" = :v13, "t"."cal_bymonthday" = :v14, "t"."cal_bysetpos" = :v15, "t"."cal_count" = :v16, "t"."cal_enddate" = :v17 when not matched then insert ("cal_id", "cal_frequency", "cal_interval", "cal_byday", "cal_bymonth", "cal_bymonthday", "cal_bysetpos", "cal_count", "cal_enddate") values (:v1, :v2, :v3, :v4, :v5, :v6, :v7, :v8, :v9)`,
+			in:  "INSERT INTO `live_channel` (`id`, `channelId`, `token`, `hostId`, `eventId`, `conferenceId`, `isRecurrence`, `billingCode`, `channelName`, `summary`, `startTime`, `endTime`, `status`, `password`, `ukey`, `necid`, `nevid`, `lastLiveTime`, `lastEndTime`, `confJoinerCnt`, `liveViewerCnt`, `demandViewerCnt`, `notifyToken`, `notifySubUrl`, `createTime`, `pushUrl`, `pushUrlUpdatedAt`, `version`, `siteId`, `hlsPullUrl`, `httpPullUrl`, `rtmpPullUrl`, `pullUrlUpdatedAt`, `authType`, `expireTime`) VALUES (0, 33823, '3beb2b05cd7b960025dcc49d1e135ff4', 88897156, 6667490, '1322', 0, '30663237', 'fll9192的会议1103', '', 1698994800, 1698998400, 0, '', 'lkR4', '', '', 0, 0, 0, 0, 0, '', '', '2023-11-03 14:53:06', '', 0, 3, '', '', '', '', 0, 0, 0)",
+			out: "",
 		},
+		// {
+		// 	in:  "update `tb_user_base` set `userBasicInfoId` = 35998836, `nameId` = null, `lastName` = '张三' where (`userBasicInfoId` = 35998836 and `provisionStatus` = 2)",
+		// 	out: `update "tb_user_base" set "userBasicInfoId" = 35998836, "nameId" = null, "lastName" = '张三' where ("userBasicInfoId" = 35998836 and "provisionStatus" = 2)`,
+		// },
+		// {
+		// 	in:  `INSERT INTO notice_status_new(id, chat_id, chat_type, conversation, user_id, count, push_count, sys_count, sender_seq, ackread_seq, created, valid) VALUES (NULL, 105, 5, 157, 88897133, 0, 0, 0, 0, 1693815665867, 1693815665868, 1),(NULL, 105, 5, 157, 88897136, 0, 0, 0, 0, 1693815665867, 1693815665868, 1),(NULL, 105, 5, 157, 88897135, 0, 0, 0, 0, 1693815665867, 1693815665868, 1) ON DUPLICATE KEY UPDATE valid = 1`,
+		// 	out: `MERGE INTO notice_status_new t USING( select 105, 5, 157, 88897133, 0, 0, 0, 0, 1693815665867, 1693815665868, 1 union all select 105, 5, 157, 88897136, 0, 0, 0, 0, 1693815665867, 1693815665868, 1 union all select 105, 5, 157, 88897135, 0, 0, 0, 0, 1693815665867, 1693815665868, 1) s (chat_id, chat_type, conversation, user_id, count, push_count, sys_count, sender_seq, ackread_seq, created, valid) ON (t.conversation = s.conversation and t.user_id = s.user_id) WHEN MATCHED THEN UPDATE SET t.valid = 1 WHEN NOT MATCHED THEN INSERT (chat_id, chat_type, conversation, user_id, count, push_count, sys_count, sender_seq, ackread_seq, created, valid) VALUES (s.chat_id, s.chat_type, s.conversation, s.user_id, s.count, s.push_count, s.sys_count, s.sender_seq, s.ackread_seq, s.created, s.valid);`,
+		// },
+		// {
+		// 	in:  `INSERT INTO webcal_entry_recurrencerule(cal_id,cal_frequency,cal_interval,cal_byday,cal_bymonth,cal_bymonthday,cal_bysetpos,cal_count,cal_enddate) VALUES (?,?,?,?,?,?,?,?,?) on duplicate key update cal_frequency=?,cal_interval=?,cal_byday=?,cal_bymonth=?,cal_bymonthday=?,cal_bysetpos=?,cal_count=?,cal_enddate=?`,
+		// 	out: `merge into "webcal_entry_recurrencerule" as "t" using "dual" on "t"."cal_id" = :v1 when matched then update set "t"."cal_frequency" = :v10, "t"."cal_interval" = :v11, "t"."cal_byday" = :v12, "t"."cal_bymonth" = :v13, "t"."cal_bymonthday" = :v14, "t"."cal_bysetpos" = :v15, "t"."cal_count" = :v16, "t"."cal_enddate" = :v17 when not matched then insert ("cal_id", "cal_frequency", "cal_interval", "cal_byday", "cal_bymonth", "cal_bymonthday", "cal_bysetpos", "cal_count", "cal_enddate") values (:v1, :v2, :v3, :v4, :v5, :v6, :v7, :v8, :v9)`,
+		// },
 		//{
 		//	in:  `insert into webcal_live_info(cal_id,channelId,pullurl,password,extraInfo) values(634311,131722,'https://rlive1uat.rmeet.com.cn/activity/geeZWo3','','') on duplicate key update pullurl='https://rlive1uat.rmeet.com.cn/activity/geeZWo3', password='', extraInfo=''`,
 		//	out: `merge into webcal_live_info as t using dual on t.cal_id = 634311 and t.channelId = 131722 when matched then update set t.pullurl = 'https://rlive1uat.rmeet.com.cn/activity/geeZWo3', t.password = '', t.extraInfo = '' when not matched then insert (cal_id, channelId, pullurl, password, extraInfo) values (634311, 131722, 'https://rlive1uat.rmeet.com.cn/activity/geeZWo3', '', '')`,
@@ -50,19 +62,36 @@ func TestConvertToOracle(t *testing.T) {
 		//},
 	}
 
-	converter := NewOracleConverter(map[string]map[string][]string{
-		"webcal_live_info": {
-			"cal_id":        {"cal_id"},
-			"CONS134222551": {"channelId"},
+	converter := NewOracleConverter(
+		map[string]map[string][]string{
+			"webcal_live_info": {
+				"cal_id":        {"cal_id"},
+				"CONS134222551": {"channelId"},
+			},
+			"webcal_entry_recurrencerule": {
+				"PRIMARY": {"cal_id"},
+			},
+			"exchange_bindinfo": {
+				"user_id": {"userId"},
+				"resId":   {"resId"},
+			},
+			"notice_status_new": {
+				"indexs": {"conversation", "user_id"},
+			},
 		},
-		"webcal_entry_recurrencerule": {
-			"PRIMARY": {"cal_id"},
+		nil,
+		map[string]map[string]int{
+			"notice_status_new": {
+				"id": 1,
+			},
+			"live_channel": {
+				"id": 1,
+			},
+			"tb_user_base": {
+				"userBasicInfoId": 1,
+			},
 		},
-		"exchange_bindinfo": {
-			"user_id": {"userId"},
-			"resId":   {"resId"},
-		},
-	}, nil, nil)
+	)
 	for i, tcase := range testCases {
 		t.Run(fmt.Sprintf("testcase-%d", i+1), func(t *testing.T) {
 			oSql, _, err := converter.Convert(tcase.in)
@@ -71,5 +100,35 @@ func TestConvertToOracle(t *testing.T) {
 			log.Println(oSql)
 		})
 	}
+}
+
+func TestConvertArgs(t *testing.T) {
+	sql := "INSERT INTO `live_channel` (`id`, `channelId`, `token`, `hostId`, `eventId`, `conferenceId`, `isRecurrence`, `billingCode`, `channelName`, `summary`, `startTime`, `endTime`, `status`, `password`, `ukey`, `necid`, `nevid`, `lastLiveTime`, `lastEndTime`, `confJoinerCnt`, `liveViewerCnt`, `demandViewerCnt`, `notifyToken`, `notifySubUrl`, `createTime`, `pushUrl`, `pushUrlUpdatedAt`, `version`, `siteId`, `hlsPullUrl`, `httpPullUrl`, `rtmpPullUrl`, `pullUrlUpdatedAt`, `authType`, `expireTime`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+	args := []interface{}{
+		0, 33823, "3beb2b05cd7b960025dcc49d1e135ff4", 88897156, 6667490, "1322", 0, "30663237", "fll9192的会议1103", "", 1698994800, 1698998400, 0, "", "lkR4", "", "", 0, 0, 0, 0, 0, "", "", "2023-11-03 14:53:06", "", 0, 3, "", "", "", "", 0, 0, 0,
+	}
+	converter := NewOracleConverter(
+		nil,
+		nil,
+		map[string]map[string]int{
+			"notice_status_new": {
+				"id": 1,
+			},
+			"live_channel": {
+				"id": 1,
+			},
+			"tb_user_base": {
+				"userBasicInfoId": 1,
+			},
+		},
+	)
+	newSQL, newArgs, err := converter.Convert(sql, args...)
+	assert.Nil(t, err)
+	assert.NotEqual(t, args, newArgs)
+	t.Logf("newSQL: %s, newArgs: %v", newSQL, newArgs)
+
+	formatSQL, err := Format(newSQL, newArgs)
+	assert.Nil(t, err)
+	t.Logf("formatSQL: %s", formatSQL)
 
 }

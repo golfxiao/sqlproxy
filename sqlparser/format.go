@@ -11,13 +11,23 @@ func Format(query string, args []interface{}) (string, error) {
 	if len(args) == 0 {
 		return query, nil
 	}
+
+	quoteNum := strings.Count(query, "\"")
+	query = strings.Replace(query, "\"", "`", quoteNum)
+
+	var newQuery string
+	var err error
 	if strings.Count(query, "?") > 0 {
-		return FormatIndexArgs(query, args)
+		newQuery, err = FormatIndexArgs(query, args)
 	} else if strings.Count(query, ":") > 0 {
-		return FormatNameArgs(query, args)
+		newQuery, err = FormatNameArgs(query, args)
 	} else {
-		return query, nil
+		newQuery = query
 	}
+
+	newQuery = strings.Replace(newQuery, "`", "\"", quoteNum)
+	return newQuery, err
+
 }
 
 // SQL命名参数格式化

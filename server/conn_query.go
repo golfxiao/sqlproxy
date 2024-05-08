@@ -128,6 +128,21 @@ func (c *ClientConn) newEmptyResultset(stmt *sqlparser.Select) *mysql.Resultset 
 	return r
 }
 
+// for command like show
+func (c *ClientConn) newEmptyResultsetForColumns(columns []string) *mysql.Resultset {
+	r := new(mysql.Resultset)
+	r.Fields = make([]*mysql.Field, len(columns))
+
+	for i, expr := range columns {
+		r.Fields[i] = &mysql.Field{Name: hack.Slice(expr)}
+	}
+
+	r.Values = make([][]interface{}, 0)
+	r.RowDatas = make([]mysql.RowData, 0)
+
+	return r
+}
+
 func (c *ClientConn) handleExec(sql string, args []interface{}) error {
 	backend := c.GetBackendDB()
 	if backend == nil {

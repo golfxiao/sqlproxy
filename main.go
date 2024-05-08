@@ -61,8 +61,6 @@ func main() {
 	fmt.Print(banner)
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	flag.Parse()
-	fmt.Printf("Git commit:%s\n", BuildVersion)
-	fmt.Printf("Build time:%s\n", BuildDate)
 	if *version {
 		return
 	}
@@ -101,6 +99,11 @@ func main() {
 	} else {
 		setLogLevel(cfg.LogLevel)
 	}
+
+	fmt.Printf("ConfigFile:%s\n", *configFile)
+	fmt.Printf("GOMAXPROCS:%d\n", runtime.NumCPU())
+	fmt.Printf("LogPath:%s\n", cfg.LogPath)
+	fmt.Printf("LogLevel:%s\n", cfg.LogLevel)
 
 	var svr *server.Server
 	var apiSvr *web.ApiServer
@@ -150,6 +153,7 @@ func main() {
 			}
 		}
 	}()
+	fmt.Printf("Start server listening on addr:%s\n", cfg.Addr)
 	go apiSvr.Run()
 	svr.Run()
 }

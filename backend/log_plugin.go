@@ -17,6 +17,7 @@ package backend
 import (
 	"database/sql"
 	"fmt"
+	"runtime/debug"
 	"sqlproxy/core/golog"
 	"sqlproxy/sqlparser"
 	"strings"
@@ -24,6 +25,11 @@ import (
 )
 
 func debugLogQueies(alias string, operaton, query string, t time.Time, err error, args ...interface{}) {
+	defer func() {
+		if err := recover(); err != nil {
+			golog.Error("BackendProxy", "debugLogQueries", "A panic occurred", 0, "query", query, "stack:", string(debug.Stack()))
+		}
+	}()
 	sub := time.Now().Sub(t) / 1e5
 	elsp := float64(int(sub)) / 10.0
 	flag := "  OK"
@@ -53,7 +59,8 @@ func debugLogQueies(alias string, operaton, query string, t time.Time, err error
 // database query logger struct.
 // if dev mode, use logSQLPlugin, or use dbQuerier.
 type logSQLPlugin struct {
-	db    dbQuerier
+	Context
+	db    dbQuerierWithCtx
 	alias string
 	// tx    txer
 	// txe   txEnder
@@ -92,31 +99,51 @@ func (d *logSQLPlugin) QueryRow(query string, args ...interface{}) *sql.Row {
 	return res
 }
 
-func (d *logSQLPlugin) Begin() (*sql.Tx, error) {
+func (d *logSQLPlugin) Begin() (tx *sql.Tx, err error) {
 	a := time.Now()
-	tx, err := d.db.(txer).Begin()
+	dbTxer := dbQuerierToTxer(d.db)
+	if dbTxer == nil {
+		err = fmt.Errorf("db[%T] is not backend.txer", d.db)
+		debugLogQueies(d.alias, "db.Begin", "START TRANSACTION", a, err)
+		return
+	}
+
+	tx, err = dbTxer.Begin()
 	debugLogQueies(d.alias, "db.Begin", "START TRANSACTION", a, err)
 	return tx, err
 }
 
 func (d *logSQLPlugin) Commit() error {
 	a := time.Now()
-	err := d.db.(txEnder).Commit()
+	dbTxer := dbQuerierToTxEnder(d.db)
+	if dbTxer == nil {
+		err := fmt.Errorf("db[%T] is not backend.txEnder", d.db)
+		debugLogQueies(d.alias, "db.Commit", "COMMIT", a, err)
+		return err
+	}
+	err := dbTxer.Commit()
 	debugLogQueies(d.alias, "tx.Commit", "COMMIT", a, err)
 	return err
 }
 
 func (d *logSQLPlugin) Rollback() error {
 	a := time.Now()
-	err := d.db.(txEnder).Rollback()
+	dbTxer := dbQuerierToTxEnder(d.db)
+	if dbTxer == nil {
+		err := fmt.Errorf("db[%T] is not backend.txEnder", d.db)
+		debugLogQueies(d.alias, "db.Rollback", "ROLLBACK", a, err)
+		return err
+	}
+	err := dbTxer.Rollback()
 	debugLogQueies(d.alias, "tx.Rollback", "ROLLBACK", a, err)
 	return err
 }
 
-func wrapQueryLog(db dbQuerier, alias string) SQLPlugin {
+func wrapQueryLog(db dbQuerierWithCtx, alias string) SQLPlugin {
 	golog.Info("logSQLPlugin", "wrapQueryLog", "db:"+alias, 0)
 	d := new(logSQLPlugin)
 	d.db = db
 	d.alias = alias
+	d.WithContext(db.GetContext())
 	return d
 }
