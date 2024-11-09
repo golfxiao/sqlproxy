@@ -190,5 +190,10 @@ import _ "github.com/golfxiao/dm"
 请参考：[sqlproxy设计过程](./doc/Design/architecture.md)
 
 ## 4. 反馈
+感谢您阅读这个教程，如果您觉得对您有所帮助，可以考虑请我喝杯咖啡作为鼓励😊
+
+![a cup of tea](./doc/Design/resources/cup_of_tea.jpg)
+
 如果您在使用sqlproxy的过程中发现BUG或者有新的功能需求，请发邮件至golfxiao@163.com与作者取得联系，或者添加作者微信：
+
 <img src="./doc/Design/resources/weixin_pic.jpg" width="20%" height="20%"/>
